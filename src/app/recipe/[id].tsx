@@ -13,36 +13,35 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { COLORS, SIZES } from '../../theme';
-import { getRecipeDetail, toggleSaveRecipe, checkIsSaved } from '../../services/db';
+import {
+  getRecipeDetail,
+  toggleSaveRecipe,
+  checkIsSaved,
+  deleteRecipe,
+} from '../../services/db';
 
 export default function RecipeDetailScreen() {
-  // ✨ INI KUNCINYA: ambil parameter 'id' dari URL
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-
   const [recipe, setRecipe] = useState<any>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
 
-  // Setiap kali halaman ini dibuka, ambil data terbaru dari DB
   useFocusEffect(
     useCallback(() => {
       const fetchDetail = async () => {
-        // Ambil detail resep + langkah-langkah
         const detail = await getRecipeDetail(id);
         setRecipe(detail);
 
-        // Cek apakah user yang login adalah pemilik resep ini
         const userId = await SecureStore.getItemAsync('userId');
         if (!userId) return;
 
         if (detail && detail.user_id.toString() === userId) {
-          setIsOwner(true); // Kalau iya, sembunyikan tombol bookmark
+          setIsOwner(true);
         } else {
           setIsOwner(false);
         }
 
-        // Cek apakah resep ini udah disimpan user
         const savedStatus = await checkIsSaved(userId, id);
         setIsSaved(savedStatus);
       };
@@ -50,19 +49,44 @@ export default function RecipeDetailScreen() {
     }, [id])
   );
 
-  // Fungsi bookmark: simpan / hapus dari tersimpan
   const handleSaveToggle = async () => {
     const userId = await SecureStore.getItemAsync('userId');
     if (!userId) return;
     const res = await toggleSaveRecipe(userId, id);
     setIsSaved(res.saved);
-    Alert.alert('Info', res.saved ? 'Resep disimpan! 🔖' : 'Resep dihapus dari tersimpan');
+    Alert.alert(
+      'Info',
+      res.saved ? 'Resep disimpan! 🔖' : 'Resep dihapus dari tersimpan'
+    );
   };
 
-  // Loading state
+  const handleDelete = () => {
+    Alert.alert(
+      'Hapus Resep',
+      'Yakin mau hapus resep ini? Tindakan ini tidak bisa dibatalkan.',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteRecipe(id);
+            Alert.alert('Sukses', 'Resep berhasil dihapus!');
+            router.replace('/(tabs)');
+          },
+        },
+      ]
+    );
+  };
+
   if (!recipe) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View
+        style={[
+          styles.container,
+          { justifyContent: 'center', alignItems: 'center' },
+        ]}
+      >
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
@@ -71,23 +95,41 @@ export default function RecipeDetailScreen() {
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Foto kue */}
         <View style={styles.imageWrapper}>
           <Image source={{ uri: recipe.image_path }} style={styles.image} />
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
             <Ionicons name="arrow-back" size={22} color={COLORS.text} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.content}>
-          {/* Header: kategori, judul, author, tombol bookmark */}
           <View style={styles.headerRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.category}>{recipe.category}</Text>
               <Text style={styles.title}>{recipe.title}</Text>
               <Text style={styles.author}>Oleh: {recipe.username}</Text>
             </View>
-            {!isOwner && (
+
+            {/* Tombol aksi: kalau owner -> edit + hapus, kalau bukan -> bookmark */}
+            {isOwner ? (
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => router.push(`/edit-recipe/${id}`)}
+                >
+                  <Ionicons name="create-outline" size={22} color={COLORS.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={handleDelete}
+                >
+                  <Ionicons name="trash-outline" size={22} color={COLORS.danger} />
+                </TouchableOpacity>
+              </View>
+            ) : (
               <TouchableOpacity onPress={handleSaveToggle}>
                 <Ionicons
                   name={isSaved ? 'bookmark' : 'bookmark-outline'}
@@ -98,11 +140,9 @@ export default function RecipeDetailScreen() {
             )}
           </View>
 
-          {/* Bahan-bahan */}
           <Text style={styles.sectionTitle}>Bahan-Bahan</Text>
           <Text style={styles.bodyText}>{recipe.ingredients}</Text>
 
-          {/* Langkah-langkah step by step */}
           <Text style={styles.sectionTitle}>Langkah-Langkah</Text>
           {recipe.steps?.map((step: any) => (
             <View key={step.id} style={styles.stepRow}>
@@ -152,6 +192,13 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: SIZES.h1, fontWeight: 'bold', color: COLORS.text },
   author: { color: COLORS.textLight, fontSize: 12, marginTop: 5 },
+  actionRow: { flexDirection: 'row', alignItems: 'center' },
+  actionButton: {
+    backgroundColor: COLORS.secondary,
+    padding: 8,
+    borderRadius: 20,
+    marginLeft: 8,
+  },
   sectionTitle: {
     fontSize: SIZES.h2,
     fontWeight: 'bold',
@@ -178,4 +225,4 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     lineHeight: 22,
   },
-});1
+});

@@ -108,7 +108,7 @@ export async function pickAndSaveImage(): Promise<string | null> {
   return destPath;
 }
 
-// ==================== RECIPE CRUD ====================
+// ==================== RECIPE CREATE ====================
 export async function createRecipe(
   userId: string,
   title: string,
@@ -139,6 +139,7 @@ export async function createRecipe(
   return recipeId;
 }
 
+// ==================== RECIPE READ ====================
 export async function getMyRecipes(userId: string) {
   const database = await getDB();
   return await database.getAllAsync<any>(
@@ -187,8 +188,64 @@ export async function searchRecipes(query: string) {
   );
 }
 
+// ==================== RECIPE UPDATE ====================
+export async function updateRecipe(
+  recipeId: string | number,
+  title: string,
+  ingredients: string,
+  imagePath: string,
+  category: string,
+  stepsArray: string[]
+) {
+  const database = await getDB();
+
+  // 1. Update data resep
+  await database.runAsync(
+    'UPDATE recipes SET title = ?, ingredients = ?, image_path = ?, category = ? WHERE id = ?',
+    title,
+    ingredients,
+    imagePath,
+    category,
+    recipeId
+  );
+
+  // 2. Hapus semua step lama
+  await database.runAsync('DELETE FROM steps WHERE recipe_id = ?', recipeId);
+
+  // 3. Insert step baru
+  for (let i = 0; i < stepsArray.length; i++) {
+    await database.runAsync(
+      'INSERT INTO steps (recipe_id, step_number, instruction) VALUES (?, ?, ?)',
+      recipeId,
+      i + 1,
+      stepsArray[i]
+    );
+  }
+}
+
+// ==================== RECIPE DELETE ====================
 export async function deleteRecipe(recipeId: string | number) {
   const database = await getDB();
+
+  // Ambil path gambar sebelum hapus resep
+  const recipe = await database.getFirstAsync<{ image_path: string }>(
+    'SELECT image_path FROM recipes WHERE id = ?',
+    recipeId
+  );
+
+  // Hapus file gambar dari local storage
+  if (recipe?.image_path) {
+    try {
+      const fileInfo = await FileSystem.getInfoAsync(recipe.image_path);
+      if (fileInfo.exists) {
+        await FileSystem.deleteAsync(recipe.image_path);
+      }
+    } catch (e) {
+      console.log('Gagal hapus file gambar:', e);
+    }
+  }
+
+  // Hapus resep dari DB (cascade akan hapus steps & saved_recipes)
   await database.runAsync('DELETE FROM recipes WHERE id = ?', recipeId);
 }
 
