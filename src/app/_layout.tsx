@@ -17,7 +17,7 @@ export default function RootLayout() {
         <Stack.Screen name="register" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="recipe/[id]" />
-        <Stack.Screen name="edit-recipe/[id]" /> {/* <-- TAMBAHIN INI */}
+        <Stack.Screen name="edit-recipe/[id]" /> 
       </Stack>
     </>
   );
