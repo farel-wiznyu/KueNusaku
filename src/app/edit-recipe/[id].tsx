@@ -8,10 +8,9 @@ import {
   ScrollView,
   Image,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, SIZES, CATEGORIES } from '../../theme';
 import {
   pickAndSaveImage,
@@ -20,83 +19,77 @@ import {
 } from '../../services/db';
 
 export default function EditRecipeScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
 
-  const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState('');
   const [ingredients, setIngredients] = useState('');
   const [steps, setSteps] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [category, setCategory] = useState(CATEGORIES[0]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadRecipe = async () => {
-      const detail = await getRecipeDetail(id);
-      if (!detail) {
-        Alert.alert('Error', 'Resep tidak ditemukan');
-        router.back();
+      if (!id) {
+        setLoading(false);
         return;
       }
+      // Ganti getRecipeById -> getRecipeDetail
+      const recipe = await getRecipeDetail(id);
+      if (recipe) {
+        setTitle(recipe.title);
+        setIngredients(recipe.ingredients ?? '');
+        setImageUri(recipe.image_path);
+        setCategory(recipe.category || CATEGORIES[0]);
 
-      setTitle(detail.title);
-      setIngredients(detail.ingredients || '');
-      setImageUri(detail.image_path);
-      setCategory(detail.category);
-
-      // Gabungin semua step jadi 1 string, pisah dengan newline
-      const stepText = detail.steps
-        .map((s: any) => s.instruction)
-        .join('\n');
-      setSteps(stepText);
-
+        // steps di db.ts baliknya array of { instruction }, jadi kita join pakai '\n'
+        const stepsText = (recipe.steps ?? [])
+          .map((s: { instruction: string }) => s.instruction)
+          .join('\n');
+        setSteps(stepsText);
+      }
       setLoading(false);
     };
     loadRecipe();
   }, [id]);
 
-  const handleChangeImage = async () => {
+  const handlePickImage = async () => {
     const uri = await pickAndSaveImage();
     if (uri) setImageUri(uri);
   };
 
   const handleUpdate = async () => {
     if (!title || !ingredients || !steps || !imageUri) {
-      Alert.alert('Error', 'Harap isi semua kolom!');
+      Alert.alert('Error', 'Harap isi semua kolom dan pilih foto!');
       return;
     }
 
     const stepArray = steps.split('\n').filter((s) => s.trim() !== '');
     await updateRecipe(id, title, ingredients, imageUri, category, stepArray);
-
     Alert.alert('Sukses', 'Resep berhasil diupdate!');
     router.back();
   };
 
   if (loading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+      <View style={styles.loadingContainer}>
+        <Text>Loading...</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView
+    <KeyboardAwareScrollView
       style={styles.container}
+      contentContainerStyle={{ paddingBottom: 100 }}
+      enableOnAndroid={true}
+      extraScrollHeight={120}
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingBottom: 40 }}
     >
-      {/* Header dengan tombol back */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Resep</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <Text style={styles.headerTitle}>Edit Resep</Text>
 
-      <Text style={styles.label}>Judul Resep</Text>
       <TextInput
         style={styles.input}
         placeholder="masukkan judul resep"
@@ -105,15 +98,13 @@ export default function EditRecipeScreen() {
         onChangeText={setTitle}
       />
 
-      <Text style={styles.label}>Foto Kue</Text>
-      <TouchableOpacity style={styles.imagePicker} onPress={handleChangeImage}>
+      <TouchableOpacity style={styles.imagePicker} onPress={handlePickImage}>
         {imageUri ? (
           <Image source={{ uri: imageUri }} style={styles.previewImage} />
         ) : (
           <Text style={styles.imagePickerText}>+ masukkan foto kue</Text>
         )}
       </TouchableOpacity>
-      <Text style={styles.hint}>Ketuk foto untuk mengganti</Text>
 
       <Text style={styles.label}>Kategori</Text>
       <ScrollView
@@ -136,20 +127,17 @@ export default function EditRecipeScreen() {
         ))}
       </ScrollView>
 
-      <Text style={styles.label}>Bahan-Bahan</Text>
       <TextInput
         style={[styles.input, styles.textArea]}
-        placeholder="masukkan bahan-bahan"
+        placeholder="masukkan bahan-bahan (pisahkan dengan enter)"
         placeholderTextColor={COLORS.textLight}
         multiline
         value={ingredients}
         onChangeText={setIngredients}
       />
-
-      <Text style={styles.label}>Langkah-Langkah</Text>
       <TextInput
         style={[styles.input, styles.textArea]}
-        placeholder="satu langkah per baris"
+        placeholder="masukkan langkah-langkah (pisahkan dengan enter)"
         placeholderTextColor={COLORS.textLight}
         multiline
         value={steps}
@@ -157,9 +145,9 @@ export default function EditRecipeScreen() {
       />
 
       <TouchableOpacity style={styles.button} onPress={handleUpdate}>
-        <Text style={styles.buttonText}>SIMPAN PERUBAHAN</Text>
+        <Text style={styles.buttonText}>UPDATE</Text>
       </TouchableOpacity>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -169,23 +157,18 @@ const styles = StyleSheet.create({
     padding: SIZES.padding,
     backgroundColor: COLORS.background,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 40,
-    marginBottom: 20,
+    backgroundColor: COLORS.background,
   },
   headerTitle: {
-    fontSize: SIZES.h2,
+    fontSize: SIZES.h1,
     fontWeight: 'bold',
     color: COLORS.text,
-  },
-  label: {
-    fontSize: SIZES.h3,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 8,
+    marginBottom: 20,
+    marginTop: 40,
   },
   input: {
     backgroundColor: COLORS.secondary,
@@ -198,10 +181,11 @@ const styles = StyleSheet.create({
   textArea: { height: 100, textAlignVertical: 'top' },
   imagePicker: {
     backgroundColor: COLORS.secondary,
-    height: 180,
+    height: 150,
     borderRadius: SIZES.borderRadius,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 15,
     borderWidth: 2,
     borderColor: COLORS.primary,
     borderStyle: 'dashed',
@@ -213,12 +197,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   previewImage: { width: '100%', height: '100%' },
-  hint: {
-    fontSize: 11,
-    color: COLORS.textLight,
-    fontStyle: 'italic',
-    marginTop: 6,
-    marginBottom: 15,
+  label: {
+    fontSize: SIZES.h3,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 8,
   },
   catChip: {
     paddingHorizontal: 15,
