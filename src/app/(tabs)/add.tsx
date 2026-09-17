@@ -9,6 +9,7 @@ import {
   Image,
   Alert,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { COLORS, SIZES, CATEGORIES } from '../../theme';
@@ -48,10 +49,13 @@ export default function AddRecipeScreen() {
   };
 
   return (
-    <ScrollView
+    <KeyboardAwareScrollView
       style={styles.container}
+      contentContainerStyle={{ paddingBottom: 100 }}
+      enableOnAndroid={true}
+      extraScrollHeight={120}
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingBottom: 40 }}
     >
       <Text style={styles.headerTitle}>Tambah Resep</Text>
 
@@ -112,7 +116,7 @@ export default function AddRecipeScreen() {
       <TouchableOpacity style={styles.button} onPress={handleSave}>
         <Text style={styles.buttonText}>SIMPAN</Text>
       </TouchableOpacity>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
